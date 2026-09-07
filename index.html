@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>후쿠오카 여행 날씨 · 9/13-9/16</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="후쿠오카날씨">
+<style>
+  :root{
+    --bg: #eef4fb;
+    --bg2: #dce8f7;
+    --card: #ffffff;
+    --card-border: #e2e8f0;
+    --text: #1e293b;
+    --text-dim: #64748b;
+    --accent: #2563eb;
+    --accent-soft: #dbeafe;
+    --shadow: 0 4px 16px rgba(30, 64, 175, 0.08);
+    --shadow-lg: 0 12px 32px rgba(30, 64, 175, 0.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #0b1220;
+      --bg2: #0f1830;
+      --card: #141d33;
+      --card-border: #22304d;
+      --text: #e6ecf7;
+      --text-dim: #93a1bd;
+      --accent: #60a5fa;
+      --accent-soft: #1e3a6a;
+      --shadow: 0 4px 16px rgba(0,0,0,0.35);
+      --shadow-lg: 0 12px 32px rgba(0,0,0,0.45);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: -apple-system, "Segoe UI", "Malgun Gothic", Pretendard, Roboto, sans-serif;
+    background: linear-gradient(180deg, var(--bg) 0%, var(--bg2) 100%);
+    color: var(--text);
+    min-height:100vh;
+    padding: 24px clamp(12px, 1.5vw, 28px) 60px;
+  }
+  .wrap{max-width: 1900px; margin: 0 auto;}
+  header.top{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  h1{font-size: 22px; margin: 0 0 4px; letter-spacing:-0.02em;}
+  .subtitle{color: var(--text-dim); font-size: 13px; margin:0;}
+  .refresh-box{display:flex; flex-direction:column; align-items:flex-end; gap:4px;}
+  #refreshBtn{
+    border:none; background: var(--accent); color:#fff; font-size:13px; font-weight:600;
+    padding:8px 14px; border-radius:999px; cursor:pointer; display:flex; align-items:center; gap:6px;
+    box-shadow: var(--shadow);
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  #refreshBtn:hover{opacity:.9;}
+  #refreshBtn:active{transform: scale(0.96);}
+  #refreshBtn.loading .spin{animation: spin 0.9s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .updated{font-size:11px; color: var(--text-dim);}
+
+  .tabs{display:flex; gap:8px; margin-bottom:18px; overflow-x:auto; padding-bottom:2px;}
+  .tab{
+    flex: 0 0 auto; padding:10px 16px; border-radius: 14px; background: var(--card);
+    border:1px solid var(--card-border); cursor:pointer; text-align:center; min-width:84px;
+    box-shadow: var(--shadow);
+  }
+  .tab .d{font-size:11px; color:var(--text-dim);}
+  .tab .n{font-size:15px; font-weight:700;}
+  .tab.active{background: var(--accent); border-color: var(--accent);}
+  .tab.active .d, .tab.active .n{color:#fff;}
+
+  .panel{display:none;}
+  .panel.active{display:block; animation: fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform: translateY(4px);} to{opacity:1; transform:none;}}
+
+  .summary{
+    display:flex; gap:14px; flex-wrap:wrap; margin-bottom:16px;
+  }
+  .stat{
+    background: var(--card); border:1px solid var(--card-border); border-radius:16px;
+    padding:14px 18px; flex:1; min-width:120px; box-shadow: var(--shadow);
+  }
+  .stat .label{font-size:11px; color:var(--text-dim); margin-bottom:4px;}
+  .stat .value{font-size:20px; font-weight:700;}
+  .stat .value.hi{color:#ef4444;}
+  .stat .value.lo{color:#3b82f6;}
+  .stat .value.rain{color:#0ea5e9;}
+
+  .strip{
+    display:flex; border-radius:12px; overflow:hidden; margin-bottom:16px; box-shadow: var(--shadow);
+    font-size:12px; font-weight:600; color:#fff;
+  }
+  .strip .seg{padding:8px 4px; text-align:center; white-space:nowrap;}
+
+  .hours{
+    display:flex; gap:10px; overflow-x:auto; padding: 4px 2px 12px;
+  }
+  .hcard{
+    flex: 1 1 78px; min-width:78px; max-width:150px; background: var(--card); border:1px solid var(--card-border);
+    border-radius:16px; padding:14px 8px; text-align:center; box-shadow: var(--shadow);
+    position:relative;
+  }
+  .hcard .hour{font-size:12px; color:var(--text-dim); font-weight:600;}
+  .hcard .badge{
+    display:inline-block; font-size:9px; font-weight:700; color:#fff; padding:2px 6px;
+    border-radius:999px; margin-top:4px;
+  }
+  .hcard .icon{font-size:28px; margin:8px 0 4px;}
+  .hcard .temp{font-size:17px; font-weight:700;}
+  .hcard .precip{font-size:11px; margin-top:6px; padding:3px 6px; border-radius:8px; font-weight:600;}
+  .hcard .precip.none{color: var(--text-dim); background: transparent;}
+
+  .legend{font-size:11px; color:var(--text-dim); display:flex; gap:14px; flex-wrap:wrap; margin-top:6px;}
+  .legend .lg-item{display:flex; align-items:center; gap:5px;}
+  .legend .dot{width:9px; height:9px; border-radius:50%; display:inline-block;}
+
+  .banner{
+    background: var(--accent-soft); border-radius:14px; padding:14px 16px; margin-bottom:16px;
+    font-size:13px; display:none;
+  }
+  .banner.show{display:block;}
+  .banner.err{background:#fee2e2; color:#991b1b;}
+
+  footer{text-align:center; font-size:11px; color:var(--text-dim); margin-top:30px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>🌤️ 후쿠오카 여행 날씨</h1>
+      <p class="subtitle">2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량</p>
+    </div>
+    <div class="refresh-box">
+      <button id="refreshBtn" onclick="loadAll()">
+        <span class="spin">⟳</span> 갱신
+      </button>
+      <span class="updated" id="updatedAt">불러오는 중...</span>
+    </div>
+  </header>
+
+  <div id="errBanner" class="banner err"></div>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="panels"></div>
+
+  <div class="legend">
+    <span class="lg-item"><span class="dot" style="background:#3b82f6"></span> 후쿠오카시</span>
+    <span class="lg-item"><span class="dot" style="background:#10b981"></span> 구마모토시</span>
+    <span class="lg-item"><span class="dot" style="background:#8b5cf6"></span> 나카쓰시</span>
+    <span class="lg-item"><span class="dot" style="background:#f59e0b"></span> 키타큐슈시</span>
+    <span class="lg-item"><span class="dot" style="background:#ec4899"></span> 다자이후시</span>
+    <span class="lg-item"><span class="dot" style="background:#14b8a6"></span> 창원시</span>
+  </div>
+
+  <footer>데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.</footer>
+</div>
+
+<script>
+const LOCATIONS = {
+  fukuoka:   {name:'후쿠오카시', lat:33.5904, lon:130.4017, color:'#3b82f6'},
+  kumamoto:  {name:'구마모토시', lat:32.7898, lon:130.7417, color:'#10b981'},
+  nakatsu:   {name:'나카쓰시',   lat:33.5985, lon:131.1873, color:'#8b5cf6'},
+  kitakyushu:{name:'키타큐슈시', lat:33.8834, lon:130.8751, color:'#f59e0b'},
+  dazaifu:   {name:'다자이후시', lat:33.5147, lon:130.5352, color:'#ec4899'},
+  changwon:  {name:'창원시',     lat:35.2281, lon:128.6811, color:'#14b8a6'},
+};
+
+// hour -> location key, per date. Boundary hour belongs to the NEW location.
+const SCHEDULE = {
+  '2026-09-13': mkHours([[7,9,'fukuoka'],[9,16,'kumamoto'],[16,25,'fukuoka']]),
+  '2026-09-14': mkHours([[7,9,'fukuoka'],[9,13,'nakatsu'],[13,20,'kitakyushu'],[20,25,'fukuoka']]),
+  '2026-09-15': mkHours([[7,10,'fukuoka'],[10,14,'dazaifu'],[14,25,'fukuoka']]),
+  '2026-09-16': mkHours([[7,13,'fukuoka'],[13,25,'changwon']]),
+};
+
+function mkHours(segments){
+  // segments: [from, to_exclusive, loc] ; last hour of day is 24 (=midnight), inclusive
+  const map = {};
+  for(const [from,to,loc] of segments){
+    for(let h=from; h<to; h++) map[h]=loc;
+  }
+  return map;
+}
+
+const DATES = Object.keys(SCHEDULE);
+const START_DATE = '2026-09-13';
+const END_DATE = '2026-09-17'; // one extra day so hour 24 (midnight) of the 16th resolves
+
+const WMO = {
+  0:['☀️','맑음'],1:['🌤️','대체로 맑음'],2:['⛅','구름 조금'],3:['☁️','흐림'],
+  45:['🌫️','안개'],48:['🌫️','안개'],
+  51:['🌦️','약한 이슬비'],53:['🌦️','이슬비'],55:['🌧️','강한 이슬비'],
+  56:['🌧️','언 이슬비'],57:['🌧️','언 이슬비'],
+  61:['🌦️','약한 비'],63:['🌧️','비'],65:['🌧️','강한 비'],
+  66:['🌧️','언 비'],67:['🌧️','언 비'],
+  71:['🌨️','약한 눈'],73:['🌨️','눈'],75:['❄️','강한 눈'],77:['🌨️','싸락눈'],
+  80:['🌦️','소나기'],81:['🌧️','소나기'],82:['⛈️','강한 소나기'],
+  85:['🌨️','소나기눈'],86:['❄️','강한 소나기눈'],
+  95:['⛈️','뇌우'],96:['⛈️','뇌우/우박'],99:['⛈️','강한 뇌우/우박'],
+};
+function wmo(code){ return WMO[code] || ['🌡️','-']; }
+
+let CACHE = {}; // loc -> {temp:Map, precip:Map, code:Map}
+let activeDate = DATES[0];
+
+function buildUrl(locKey){
+  const l = LOCATIONS[locKey];
+  return `https://api.open-meteo.com/v1/forecast?latitude=${l.lat}&longitude=${l.lon}`
+    + `&hourly=temperature_2m,precipitation,weathercode`
+    + `&start_date=${START_DATE}&end_date=${END_DATE}&timezone=Asia%2FTokyo`;
+}
+
+function keyFor(dateStr, hour){
+  if(hour < 24) return `${dateStr}T${String(hour).padStart(2,'0')}:00`;
+  // hour 24 -> next day 00:00
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate()+1);
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}T00:00`;
+}
+
+async function fetchLoc(locKey){
+  const res = await fetch(buildUrl(locKey));
+  if(!res.ok) throw new Error(`${LOCATIONS[locKey].name} 예보 요청 실패 (${res.status})`);
+  const j = await res.json();
+  const temp={}, precip={}, code={};
+  j.hourly.time.forEach((t,i)=>{
+    temp[t]=j.hourly.temperature_2m[i];
+    precip[t]=j.hourly.precipitation[i];
+    code[t]=j.hourly.weathercode[i];
+  });
+  return {temp,precip,code};
+}
+
+async function loadAll(){
+  const btn = document.getElementById('refreshBtn');
+  const upd = document.getElementById('updatedAt');
+  const err = document.getElementById('errBanner');
+  btn.classList.add('loading'); btn.disabled = true;
+  err.classList.remove('show'); err.textContent='';
+  try{
+    const keys = Object.keys(LOCATIONS);
+    const results = await Promise.all(keys.map(k=>fetchLoc(k)));
+    keys.forEach((k,i)=> CACHE[k]=results[i]);
+    render();
+    const now = new Date();
+    upd.textContent = '마지막 갱신: ' + now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    try{ localStorage.setItem('fukuokaWeatherCache', JSON.stringify({CACHE, ts: now.toISOString()})); }catch(e){}
+  }catch(e){
+    err.textContent = '⚠️ 날씨 정보를 가져오지 못했습니다. 인터넷 연결을 확인한 뒤 갱신 버튼을 눌러주세요. (' + e.message + ')';
+    err.classList.add('show');
+    const cached = loadCache();
+    if(cached){
+      CACHE = cached.CACHE;
+      render();
+      upd.textContent = '오프라인 · 마지막 저장: ' + new Date(cached.ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    } else {
+      upd.textContent = '갱신 실패';
+    }
+  }finally{
+    btn.classList.remove('loading'); btn.disabled = false;
+  }
+}
+
+function loadCache(){
+  try{
+    const raw = localStorage.getItem('fukuokaWeatherCache');
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+
+function dateLabel(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const wd = d.toLocaleDateString('ko-KR',{weekday:'short'});
+  const md = `${d.getMonth()+1}/${d.getDate()}`;
+  return {md, wd};
+}
+
+function buildTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  DATES.forEach(dateStr=>{
+    const {md,wd} = dateLabel(dateStr);
+    const el = document.createElement('div');
+    el.className = 'tab' + (dateStr===activeDate?' active':'');
+    el.innerHTML = `<div class="n">${md}</div><div class="d">${wd}요일</div>`;
+    el.onclick = ()=>{ activeDate = dateStr; render(); };
+    tabs.appendChild(el);
+  });
+}
+
+function render(){
+  buildTabs();
+  const panels = document.getElementById('panels');
+  panels.innerHTML = '';
+
+  DATES.forEach(dateStr=>{
+    const schedule = SCHEDULE[dateStr];
+    const hours = Object.keys(schedule).map(Number).sort((a,b)=>a-b);
+
+    // gather rows
+    const rows = hours.map(h=>{
+      const locKey = schedule[h];
+      const loc = LOCATIONS[locKey];
+      const tk = keyFor(dateStr, h);
+      const data = CACHE[locKey];
+      const temp = data ? data.temp[tk] : undefined;
+      const precip = data ? data.precip[tk] : undefined;
+      const code = data ? data.code[tk] : undefined;
+      return {h, locKey, loc, temp, precip, code};
+    });
+
+    const haveData = rows.some(r=>r.temp!==undefined);
+    let hi=-Infinity, lo=Infinity, rainSum=0;
+    rows.forEach(r=>{
+      if(typeof r.temp==='number'){ hi=Math.max(hi,r.temp); lo=Math.min(lo,r.temp); }
+      if(typeof r.precip==='number') rainSum += r.precip;
+    });
+
+    // region strip: group consecutive same-location hours
+    const groups = [];
+    rows.forEach(r=>{
+      const last = groups[groups.length-1];
+      if(last && last.locKey===r.locKey) last.count++;
+      else groups.push({locKey:r.locKey, count:1});
+    });
+
+    const panel = document.createElement('div');
+    panel.className = 'panel' + (dateStr===activeDate?' active':'');
+
+    const {md,wd} = dateLabel(dateStr);
+
+    panel.innerHTML = `
+      <div class="summary">
+        <div class="stat"><div class="label">${md} (${wd}) 최고</div><div class="value hi">${haveData && isFinite(hi)?Math.round(hi)+'°':'-'}</div></div>
+        <div class="stat"><div class="label">최저</div><div class="value lo">${haveData && isFinite(lo)?Math.round(lo)+'°':'-'}</div></div>
+        <div class="stat"><div class="label">누적 강수량</div><div class="value rain">${haveData?rainSum.toFixed(1)+'mm':'-'}</div></div>
+      </div>
+      <div class="strip">
+        ${groups.map(g=>`<div class="seg" style="flex:${g.count}; background:${LOCATIONS[g.locKey].color}">${LOCATIONS[g.locKey].name}</div>`).join('')}
+      </div>
+      <div class="hours">
+        ${rows.map(r=>{
+          const [icon] = wmo(r.code);
+          const tempTxt = typeof r.temp==='number' ? Math.round(r.temp)+'°' : '-';
+          let precipHtml;
+          if(typeof r.precip!=='number'){
+            precipHtml = `<div class="precip none">-</div>`;
+          } else if(r.precip <= 0){
+            precipHtml = `<div class="precip none">0mm</div>`;
+          } else {
+            const intensity = r.precip < 1 ? 'rgba(14,165,233,0.15)' : r.precip < 4 ? 'rgba(14,165,233,0.35)' : 'rgba(14,165,233,0.6)';
+            const tColor = r.precip < 4 ? '#0369a1' : '#fff';
+            precipHtml = `<div class="precip" style="background:${intensity}; color:${tColor}">💧${r.precip.toFixed(1)}mm</div>`;
+          }
+          const hourLabel = r.h===24 ? '24시' : `${r.h}시`;
+          return `
+            <div class="hcard">
+              <div class="hour">${hourLabel}</div>
+              <div class="badge" style="background:${r.loc.color}">${r.loc.name.replace('시','')}</div>
+              <div class="icon">${icon}</div>
+              <div class="temp">${tempTxt}</div>
+              ${precipHtml}
+            </div>`;
+        }).join('')}
+      </div>
+    `;
+    panels.appendChild(panel);
+  });
+}
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+
+loadAll();
+</script>
+</body>
+</html>

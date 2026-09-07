@@ -132,16 +132,46 @@
   .banner.err{background:#fee2e2; color:#991b1b;}
 
   footer{text-align:center; font-size:11px; color:var(--text-dim); margin-top:30px;}
+
+  .modeSwitch{display:flex; gap:8px; margin-bottom:16px;}
+  .modeBtn{
+    flex:1; padding:10px; border-radius:12px; border:1px solid var(--card-border); background:var(--card);
+    font-weight:700; font-size:13px; cursor:pointer; color:var(--text-dim);
+  }
+  .modeBtn.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+
+  .iti-list{position:relative; padding-left:76px;}
+  .iti-list::before{content:''; position:absolute; left:55px; top:6px; bottom:6px; width:2px; background:var(--card-border);}
+  .iti-item{position:relative; margin-bottom:14px;}
+  .iti-time{position:absolute; left:-76px; width:50px; text-align:right; top:8px;}
+  .iti-time .t{font-size:13px; font-weight:700;}
+  .iti-time .dur{font-size:10px; color:var(--text-dim); margin-top:2px;}
+  .iti-dot{
+    position:absolute; left:-34px; top:4px; width:26px; height:26px; border-radius:50%;
+    background:var(--card); border:2px solid var(--accent); display:flex; align-items:center;
+    justify-content:center; font-size:13px; z-index:1;
+  }
+  .iti-card{
+    background:var(--card); border:1px solid var(--card-border); border-radius:14px;
+    padding:10px 14px; box-shadow:var(--shadow);
+  }
+  .iti-title-row{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .iti-title{font-weight:700; font-size:14px;}
+  .iti-price{font-size:12px; font-weight:700; color:#059669; white-space:nowrap;}
+  .iti-detail{font-size:12.5px; color:var(--text); margin-top:4px;}
+  .iti-note{font-size:11.5px; color:var(--text-dim); margin-top:4px; font-style:italic;}
+  .iti-period{font-size:12px; font-weight:700; color:var(--accent); margin:16px 0 8px 0;}
+  .iti-item:first-child, .iti-period + .iti-item{margin-top:0;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>🌤️ 후쿠오카 여행 날씨</h1>
-      <p class="subtitle">2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량</p>
+      <h1 id="pageTitle">🌤️ 후쿠오카 여행 날씨</h1>
+      <p class="subtitle" id="pageSubtitle">2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량</p>
     </div>
-    <div class="refresh-box">
+    <div class="refresh-box" id="refreshBox">
       <button id="refreshBtn" onclick="loadAll()">
         <span class="spin">⟳</span> 갱신
       </button>
@@ -149,21 +179,32 @@
     </div>
   </header>
 
+  <div class="modeSwitch">
+    <button class="modeBtn active" data-mode="weather" onclick="switchMode('weather')">🌤️ 날씨</button>
+    <button class="modeBtn" data-mode="itinerary" onclick="switchMode('itinerary')">🗓️ 일정</button>
+  </div>
+
   <div id="errBanner" class="banner err"></div>
 
   <div class="tabs" id="tabs"></div>
-  <div id="panels"></div>
 
-  <div class="legend">
-    <span class="lg-item"><span class="dot" style="background:#3b82f6"></span> 후쿠오카시</span>
-    <span class="lg-item"><span class="dot" style="background:#10b981"></span> 구마모토시</span>
-    <span class="lg-item"><span class="dot" style="background:#8b5cf6"></span> 나카쓰시</span>
-    <span class="lg-item"><span class="dot" style="background:#f59e0b"></span> 키타큐슈시</span>
-    <span class="lg-item"><span class="dot" style="background:#ec4899"></span> 다자이후시</span>
-    <span class="lg-item"><span class="dot" style="background:#14b8a6"></span> 창원시</span>
+  <div id="weatherSection">
+    <div id="panels"></div>
+    <div class="legend">
+      <span class="lg-item"><span class="dot" style="background:#3b82f6"></span> 후쿠오카시</span>
+      <span class="lg-item"><span class="dot" style="background:#10b981"></span> 구마모토시</span>
+      <span class="lg-item"><span class="dot" style="background:#8b5cf6"></span> 나카쓰시</span>
+      <span class="lg-item"><span class="dot" style="background:#f59e0b"></span> 키타큐슈시</span>
+      <span class="lg-item"><span class="dot" style="background:#ec4899"></span> 다자이후시</span>
+      <span class="lg-item"><span class="dot" style="background:#14b8a6"></span> 창원시</span>
+    </div>
   </div>
 
-  <footer>데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.</footer>
+  <div id="itinerarySection" style="display:none">
+    <div id="itiPanels"></div>
+  </div>
+
+  <footer id="pageFooter">데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.</footer>
 </div>
 
 <script>
@@ -211,8 +252,105 @@ const WMO = {
 };
 function wmo(code){ return WMO[code] || ['🌡️','-']; }
 
+const ITINERARY = {
+  '2026-09-13': [
+    {period:'오전',t:'4:00',title:'기상'},
+    {period:'오전',t:'5:30',title:'주차장'},
+    {period:'오전',t:'7:00',title:'후쿠오카행 비행기 이륙',detail:'제주항공 7C1451',note:'우선수하물 구입'},
+    {period:'오전',t:'8:00',title:'후쿠오카 공항 착륙',detail:'입국심사 및 교통카드 충전',price:2000},
+    {period:'오전',t:'9:00',title:'하카타역, 호텔 짐맡기기',detail:'패스권 수령'},
+    {period:'오전',t:'9:28',dur:'42분',title:'하카타 → 구마모토',detail:'큐슈 신칸센(사쿠라 743 사쿠라 구마모토)'},
+    {period:'오전',t:'10:10',dur:'20분',title:'구마모토역 → 카즈레츠테이'},
+    {period:'오전',t:'10:30',dur:'1시간',title:'점심 웨이팅'},
+    {period:'오전',t:'11:30',dur:'1시간',title:'점심식사',detail:'카즈레츠테이',note:'에비+히레카츠',price:2288},
+    {period:'오전',t:'12:30',dur:'20분',title:'카즈레츠테이 → 구마모토성',detail:'도보'},
+    {period:'오후',t:'13:00',dur:'1시간 30분',title:'구마모토성 관람'},
+    {period:'오후',t:'14:30',dur:'30분',title:'구마모토성 → 구마모토역'},
+    {period:'오후',t:'15:07',dur:'53분',title:'구마모토 → 하카타역',detail:'큐슈 신칸센(322 쓰바메 하카타)'},
+    {period:'오후',t:'15:55',title:'체크인'},
+    {period:'오후',t:'16:30',dur:'30분',title:'호텔 → 후쿠오카시 박물관',price:260},
+    {period:'오후',t:'17:00',dur:'30분',title:'후쿠오카시 박물관 관람',note:'앞의 시간을 어떻게든 땡겨야함',price:200},
+    {period:'오후',t:'18:30',title:'이동 및 식사',detail:'요코마사',note:'혼합규탄정식 8pcs',price:2680},
+    {period:'오후',t:'20:00',title:'휴식',note:'로피아(깔루아 말차), 다이소, 스탠다드 프로덕트 등',price:2000},
+  ],
+  '2026-09-14': [
+    {period:'오전',t:'7:25',title:'기상',note:'마트 음식'},
+    {period:'오전',t:'9:00',dur:'1시간 16분',title:'하카타역 → 나카쓰역',detail:'소닉 9 특급 오이타'},
+    {period:'오전',t:'10:16',dur:'20분',title:'나카쓰역 → 나카쓰성',detail:'도보'},
+    {period:'오전',t:'10:40',dur:'1시간',title:'나카쓰성 관람'},
+    {period:'오전',t:'11:40',dur:'10분',title:'나카쓰성 → 카라이치 나카쓰 소혼텐'},
+    {period:'오전',t:'12:00',dur:'40분',title:'점심식사',detail:'카라이치 나카쓰 소혼텐',note:'가라아게 벤또',price:630},
+    {period:'오전',t:'12:40',dur:'13분',title:'카라이치 나카쓰 → 나카쓰역',detail:'도보'},
+    {period:'오전',t:'13:04',dur:'33분',title:'나카쓰역 → 고쿠라역',detail:'소닉 28 특급 하카타'},
+    {period:'오전',t:'13:37',dur:'16분',title:'고쿠라역 → 고쿠라성',detail:'도보'},
+    {period:'오후',t:'14:00',dur:'2시간',title:'고쿠라성 관람',note:'고쿠라성 정원 포함시 700엔',price:500},
+    {period:'오후',t:'16:00',dur:'16분',title:'고쿠라성 → 고쿠라역',detail:'도보'},
+    {period:'오후',t:'16:27',dur:'15분',title:'고쿠라역 → 야하타역',detail:'노가타 / 승강장 5'},
+    {period:'오후',t:'17:05',dur:'10분',title:'야하타역 → 사쿠라야마 전망대',detail:'무료 셔틀버스'},
+    {period:'오후',t:'17:30',dur:'1시간',title:'사쿠라야마 전망대 야경 관람',note:'케이블카 + 슬로프카',price:1230},
+    {period:'오후',t:'19:15',dur:'10분',title:'사쿠라야마 전망대 → 야하타역',detail:'무료 셔틀버스'},
+    {period:'오후',t:'19:33',dur:'1시간 8분',title:'야하타역 → 하카타역',detail:'가고시마 본선(구간쾌속 아라키)'},
+    {period:'오후',t:'20:41',title:'하카타역 도착'},
+    {period:'오후',t:'',title:'저녁식사 및 휴식',detail:'키와미야 함바그',note:'라지 세트',price:2508},
+  ],
+  '2026-09-15': [
+    {period:'오전',t:'7:25',title:'기상'},
+    {period:'오전',t:'8:30',title:'아침식사',detail:'탄야 하카타',note:'아침정식',price:800},
+    {period:'오전',t:'9:00',title:'스미요시 슈한 하카타점',note:'사케, 가토페스타하라다 과자 구입',price:7000},
+    {period:'오전',t:'9:44',dur:'46분',title:'하카타 버스터미널 → 다자이후 텐만구',detail:'11번 승강장',price:800},
+    {period:'오전',t:'10:30',dur:'2시간',title:'다자이후 텐만구 관람'},
+    {period:'오전',t:'12:30',dur:'1시간',title:'점심식사',detail:'라멘 오이겐',note:'돈코츠라멘+직화돼지덮밥',price:1370},
+    {period:'오후',t:'13:36',dur:'44분',title:'다자이후 텐만구 → 하카타 버스터미널',price:800},
+    {period:'오후',t:'14:20',dur:'40분',title:'하카타역 → 동장사',detail:'도보'},
+    {period:'오후',t:'15:00',dur:'9분',title:'동장사 → 캐널시티',detail:'도보'},
+    {period:'오후',t:'15:10',dur:'1시간',title:'캐널시티 쇼핑',note:'동구리, 알펜 등',price:15000},
+    {period:'오후',t:'16:10',dur:'20분',title:'캐널시티 → 효탄스시',note:'카쿠야스, SAKE TIME 중간에 방문',price:17000},
+    {period:'오후',t:'16:30',dur:'30분',title:'효탄스시 웨이팅'},
+    {period:'오후',t:'17:00',dur:'1시간',title:'저녁식사',detail:'효탄스시',note:'새우3, 오징어2, 말고기1, 가리비1, 성게1, 와규1, 도화새우1',price:3620},
+    {period:'오후',t:'18:00',dur:'40분',title:'이온쇼퍼즈, 텐진지하상가',price:7000},
+    {period:'오후',t:'18:40',title:'휴식 외 자유시간',detail:'돈돈돈~돈키~돈키~호테~',price:5000},
+    {period:'오후',t:'',title:'카쿠야스 등 주판점 방문'},
+  ],
+  '2026-09-16': [
+    {period:'오전',t:'7:00',title:'기상'},
+    {period:'오전',t:'8:00',title:'아침식사',detail:'야요이켄',price:1000},
+    {period:'오전',t:'8:40',dur:'17분',title:'야요이켄 → 스미요시신사'},
+    {period:'오전',t:'9:00',title:'스미요시 슈한 웨이팅'},
+    {period:'오전',t:'9:30',dur:'20분',title:'스미요시 슈한 쇼핑',note:'15일에 해결되면 패스'},
+    {period:'오전',t:'9:50',dur:'20분',title:'스미요시 슈한 → 프랑스과자16구',price:260},
+    {period:'오전',t:'10:00',dur:'20분',title:'프랑스과자16구',note:'다쿠아즈 8pcs',price:4536},
+    {period:'오전',t:'10:20',title:'프랑스과자16구 → 호텔',price:260},
+    {period:'오전',t:'11:00',title:'호텔 체크아웃'},
+    {period:'오전',t:'11:10',dur:'1시간',title:'점심식사',detail:'하카타 미즈타키 하마다야 쿠우텐',price:2800},
+    {period:'오전',t:'12:30',title:'후쿠오카공항 도착',note:'면세점',price:20000},
+    {period:'오전',t:'14:55',title:'김해행 비행기 이륙',detail:'제주항공 7C1454'},
+  ],
+};
+
+function yen(n){ return '¥' + n.toLocaleString('ko-KR'); }
+
+function itiIcon(e){
+  const all = (e.title||'') + ' ' + (e.detail||'');
+  if(/비행기|공항|이륙|착륙/.test(all)) return '✈️';
+  if(/신칸센|소닉|본선|열차/.test(all)) return '🚄';
+  if(/버스터미널|버스/.test(all)) return '🚌';
+  if(/셔틀/.test(all)) return '🚐';
+  if(/케이블카|슬로프카/.test(all)) return '🚡';
+  if(/도보/.test(all)) return '🚶';
+  if(/식사|점심|아침|저녁/.test(e.title||'')) return '🍽️';
+  if(/쇼핑|구입|구매/.test(e.title||'')) return '🛍️';
+  if(/관람|전망대|박물관|성$|텐만구/.test(e.title||'')) return '📸';
+  if(/기상/.test(e.title||'')) return '⏰';
+  if(/체크인/.test(e.title||'')) return '🔑';
+  if(/체크아웃/.test(e.title||'')) return '🧳';
+  if(/웨이팅/.test(e.title||'')) return '⏳';
+  if(/휴식|자유시간/.test(e.title||'')) return '☕';
+  return '📍';
+}
+
 let CACHE = {}; // loc -> {temp:Map, precip:Map, code:Map}
 let activeDate = DATES[0];
+let MODE = 'weather';
 
 function buildUrl(locKey){
   const l = LOCATIONS[locKey];
@@ -253,7 +391,7 @@ async function loadAll(){
     const keys = Object.keys(LOCATIONS);
     const results = await Promise.all(keys.map(k=>fetchLoc(k)));
     keys.forEach((k,i)=> CACHE[k]=results[i]);
-    render();
+    if(MODE==='weather') renderWeatherPanels();
     const now = new Date();
     upd.textContent = '마지막 갱신: ' + now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     try{ localStorage.setItem('fukuokaWeatherCache', JSON.stringify({CACHE, ts: now.toISOString()})); }catch(e){}
@@ -263,7 +401,7 @@ async function loadAll(){
     const cached = loadCache();
     if(cached){
       CACHE = cached.CACHE;
-      render();
+      if(MODE==='weather') renderWeatherPanels();
       upd.textContent = '오프라인 · 마지막 저장: ' + new Date(cached.ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
     } else {
       upd.textContent = '갱신 실패';
@@ -295,13 +433,79 @@ function buildTabs(){
     const el = document.createElement('div');
     el.className = 'tab' + (dateStr===activeDate?' active':'');
     el.innerHTML = `<div class="n">${md}</div><div class="d">${wd}요일</div>`;
-    el.onclick = ()=>{ activeDate = dateStr; render(); };
+    el.onclick = ()=>{ activeDate = dateStr; refresh(); };
     tabs.appendChild(el);
   });
 }
 
-function render(){
+function refresh(){
   buildTabs();
+  if(MODE==='weather') renderWeatherPanels(); else renderItineraryPanels();
+}
+
+function switchMode(m){
+  MODE = m;
+  document.querySelectorAll('.modeBtn').forEach(b=> b.classList.toggle('active', b.dataset.mode===m));
+  document.getElementById('weatherSection').style.display = m==='weather' ? '' : 'none';
+  document.getElementById('itinerarySection').style.display = m==='itinerary' ? '' : 'none';
+  document.getElementById('refreshBox').style.display = m==='weather' ? '' : 'none';
+  document.getElementById('pageTitle').textContent = m==='weather' ? '🌤️ 후쿠오카 여행 날씨' : '🗓️ 후쿠오카 여행 일정';
+  document.getElementById('pageSubtitle').textContent = m==='weather'
+    ? '2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량'
+    : '2026.09.13 (일) ~ 09.16 (수) · 시간별 상세 일정';
+  document.getElementById('pageFooter').textContent = m==='weather'
+    ? '데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.'
+    : '가격은 예상 금액이며 실제와 다를 수 있습니다.';
+  document.getElementById('errBanner').classList.remove('show');
+  refresh();
+}
+
+function renderItineraryPanels(){
+  const panels = document.getElementById('itiPanels');
+  panels.innerHTML = '';
+
+  DATES.forEach(dateStr=>{
+    const items = ITINERARY[dateStr] || [];
+    const total = items.reduce((sum,e)=> sum + (e.price||0), 0);
+
+    const panel = document.createElement('div');
+    panel.className = 'panel' + (dateStr===activeDate?' active':'');
+
+    let lastPeriod = null;
+    const rowsHtml = items.map(e=>{
+      let periodHtml = '';
+      if(e.period !== lastPeriod){
+        periodHtml = `<div class="iti-period">${e.period}</div>`;
+        lastPeriod = e.period;
+      }
+      const icon = itiIcon(e);
+      return `${periodHtml}
+        <div class="iti-item">
+          <div class="iti-time"><div class="t">${e.t||''}</div>${e.dur?`<div class="dur">${e.dur}</div>`:''}</div>
+          <div class="iti-dot">${icon}</div>
+          <div class="iti-card">
+            <div class="iti-title-row">
+              <div class="iti-title">${e.title}</div>
+              ${e.price?`<div class="iti-price">${yen(e.price)}</div>`:''}
+            </div>
+            ${e.detail?`<div class="iti-detail">${e.detail}</div>`:''}
+            ${e.note?`<div class="iti-note">💡 ${e.note}</div>`:''}
+          </div>
+        </div>`;
+    }).join('');
+
+    panel.innerHTML = `
+      <div class="summary">
+        <div class="stat"><div class="label">일정 항목</div><div class="value">${items.length}개</div></div>
+        <div class="stat"><div class="label">예상 총 비용</div><div class="value rain">${yen(total)}</div></div>
+      </div>
+      <div class="iti-list">${rowsHtml}</div>
+    `;
+    panels.appendChild(panel);
+  });
+}
+
+function renderWeatherPanels(){
   const panels = document.getElementById('panels');
   panels.innerHTML = '';
 
@@ -386,6 +590,7 @@ if('serviceWorker' in navigator){
   });
 }
 
+switchMode('weather');
 loadAll();
 </script>
 </body>

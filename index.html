@@ -163,6 +163,42 @@
   .iti-note{font-size:11.5px; color:var(--text-dim); margin-top:4px; font-style:italic; overflow-wrap:break-word;}
   .iti-period{font-size:12px; font-weight:700; color:var(--accent); margin:0 0 8px 50px;}
   .iti-period:not(:first-child){margin-top:8px;}
+
+  .packGrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(140px,1fr)); gap:12px;}
+  .packCard{
+    background:var(--card); border:1px solid var(--card-border); border-radius:14px;
+    overflow:hidden; box-shadow:var(--shadow); position:relative;
+  }
+  .packCard img{width:100%; aspect-ratio:1/1; object-fit:cover; display:block; background:#e2e8f0;}
+  .packCard .memo{padding:8px 10px; font-size:12.5px; word-break:break-word;}
+  .packCard .delBtn{
+    position:absolute; top:6px; right:6px; width:24px; height:24px; border-radius:50%;
+    background:rgba(0,0,0,0.55); color:#fff; border:none; font-size:14px; line-height:1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .packEmpty{text-align:center; color:var(--text-dim); font-size:13px; padding:40px 0;}
+  .fab{
+    position:fixed; right:20px; bottom:24px; width:56px; height:56px; border-radius:50%;
+    background:var(--accent); color:#fff; border:none; font-size:28px; box-shadow:var(--shadow-lg);
+    cursor:pointer; z-index:20; display:flex; align-items:center; justify-content:center;
+  }
+  .modalOverlay{
+    position:fixed; inset:0; background:rgba(0,0,0,0.5); display:flex; align-items:center;
+    justify-content:center; z-index:30; padding:20px;
+  }
+  .modalBox{background:var(--card); border-radius:16px; padding:20px; max-width:360px; width:100%; box-shadow:var(--shadow-lg);}
+  .modalBox h3{margin:0 0 14px; font-size:16px;}
+  .modalBox input[type=file]{width:100%; margin-bottom:12px; font-size:13px; color:var(--text);}
+  .modalBox input[type=text]{
+    width:100%; padding:10px; border-radius:10px; border:1px solid var(--card-border);
+    font-size:13px; margin-bottom:14px; background:var(--bg); color:var(--text);
+  }
+  .modalBox .previewImg{width:100%; max-height:160px; object-fit:contain; border-radius:10px; margin-bottom:12px; display:none; background:#f1f5f9;}
+  .modalActions{display:flex; gap:8px;}
+  .modalActions button{flex:1; padding:10px; border-radius:10px; border:none; font-weight:700; font-size:13px; cursor:pointer;}
+  .btnCancel{background:var(--bg2); color:var(--text);}
+  .btnSave{background:var(--accent); color:#fff;}
+  .btnSave:disabled{opacity:.5;}
 </style>
 </head>
 <body>
@@ -183,6 +219,7 @@
   <div class="modeSwitch">
     <button class="modeBtn active" data-mode="weather" onclick="switchMode('weather')">🌤️ 날씨</button>
     <button class="modeBtn" data-mode="itinerary" onclick="switchMode('itinerary')">🗓️ 일정</button>
+    <button class="modeBtn" data-mode="pack" onclick="switchMode('pack')">🎒 준비물</button>
   </div>
 
   <div id="errBanner" class="banner err"></div>
@@ -205,9 +242,32 @@
     <div id="itiPanels"></div>
   </div>
 
+  <div id="packSection" style="display:none">
+    <div id="packGrid" class="packGrid"></div>
+    <div id="packEmpty" class="packEmpty" style="display:none">아직 등록된 준비물이 없어요. 오른쪽 아래 + 버튼으로 추가해보세요.</div>
+  </div>
+
   <footer id="pageFooter">데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.</footer>
 </div>
 
+<button id="fabAdd" class="fab" style="display:none" onclick="openPackModal()">+</button>
+
+<div id="packModalOverlay" class="modalOverlay" style="display:none">
+  <div class="modalBox">
+    <h3>준비물 등록</h3>
+    <input type="file" id="packFile" accept="image/*" onchange="onPackFileChange(event)">
+    <img id="packPreview" class="previewImg">
+    <input type="text" id="packMemo" placeholder="한줄 메모 (예: 호텔 바우처, 유심 QR)" maxlength="60">
+    <div class="modalActions">
+      <button class="btnCancel" onclick="closePackModal()">취소</button>
+      <button class="btnSave" id="packSaveBtn" onclick="savePackItem()">등록</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 const LOCATIONS = {
   fukuoka:   {name:'후쿠오카시', lat:33.5904, lon:130.4017, color:'#3b82f6'},
@@ -449,16 +509,21 @@ function switchMode(m){
   document.querySelectorAll('.modeBtn').forEach(b=> b.classList.toggle('active', b.dataset.mode===m));
   document.getElementById('weatherSection').style.display = m==='weather' ? '' : 'none';
   document.getElementById('itinerarySection').style.display = m==='itinerary' ? '' : 'none';
+  document.getElementById('packSection').style.display = m==='pack' ? '' : 'none';
+  document.getElementById('fabAdd').style.display = m==='pack' ? 'flex' : 'none';
   document.getElementById('refreshBox').style.display = m==='weather' ? '' : 'none';
-  document.getElementById('pageTitle').textContent = m==='weather' ? '🌤️ 후쿠오카 여행 날씨' : '🗓️ 후쿠오카 여행 일정';
-  document.getElementById('pageSubtitle').textContent = m==='weather'
-    ? '2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량'
-    : '2026.09.13 (일) ~ 09.16 (수) · 시간별 상세 일정';
-  document.getElementById('pageFooter').textContent = m==='weather'
-    ? '데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.'
-    : '가격은 예상 금액이며 실제와 다를 수 있습니다.';
+  document.getElementById('tabs').style.display = m==='pack' ? 'none' : '';
+  const titles = {
+    weather: ['🌤️ 후쿠오카 여행 날씨', '2026.09.13 (일) ~ 09.16 (수) · 오전 7시 ~ 자정, 시간별 기온·강수량', '데이터 출처: Open-Meteo.com (무료 기상 예보 API) · 예보는 갱신 시점 기준 최신값입니다.'],
+    itinerary: ['🗓️ 후쿠오카 여행 일정', '2026.09.13 (일) ~ 09.16 (수) · 시간별 상세 일정', '가격은 예상 금액이며 실제와 다를 수 있습니다.'],
+    pack: ['🎒 여행 준비물', '호텔 바우처·QR·쿠폰·구매 목록을 등록하고 다같이 확인하세요', '이미지와 메모는 이 여행에 참여하는 모두에게 공유됩니다. 민감한 정보는 올리지 않는 걸 권장해요.'],
+  };
+  const [t, s, f] = titles[m];
+  document.getElementById('pageTitle').textContent = t;
+  document.getElementById('pageSubtitle').textContent = s;
+  document.getElementById('pageFooter').textContent = f;
   document.getElementById('errBanner').classList.remove('show');
-  refresh();
+  if(m==='pack'){ renderPack(); } else { refresh(); }
 }
 
 function renderItineraryPanels(){
@@ -584,6 +649,167 @@ function renderWeatherPanels(){
     panels.appendChild(panel);
   });
 }
+
+// ↓↓↓ Firebase 콘솔(console.firebase.google.com)에서 만든 프로젝트의 설정값을 여기 붙여넣으세요 ↓↓↓
+const firebaseConfig = {
+  apiKey: "AIzaSyDXoInLyggq4GIEfqc-h4LV-i1w2yBiLKY",
+  authDomain: "fukuoka-trip-6a9c5.firebaseapp.com",
+  projectId: "fukuoka-trip-6a9c5",
+  messagingSenderId: "964513173579",
+  appId: "1:964513173579:web:40037e3ab6db26b7c6fdce",
+};
+// ↑↑↑ 여기까지 ↑↑↑ (Storage는 유료 요금제가 필요해 사용하지 않으므로 storageBucket 값은 필요 없습니다)
+
+const PACK_PATH = 'trips/26sFukuokaW';
+let packDb = null, packReady = false;
+let packItems = [];
+let pendingFile = null;
+
+function initPack(){
+  try{
+    if(!window.firebase || firebaseConfig.apiKey.startsWith('PASTE_')) return;
+    if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    firebase.auth().onAuthStateChanged((user)=>{
+      if(user && !packReady){
+        packReady = true;
+        packDb = firebase.firestore();
+        subscribePack();
+      }
+    });
+    firebase.auth().signInAnonymously().catch((err)=> console.warn('anon auth failed', err));
+  }catch(e){ console.warn('firebase init failed', e); }
+}
+
+function subscribePack(){
+  packDb.collection(PACK_PATH + '/items').orderBy('createdAt','desc').onSnapshot((snap)=>{
+    packItems = snap.docs.map(d=> ({id:d.id, ...d.data()}));
+    if(MODE==='pack') renderPack();
+  }, (err)=> console.warn('pack listen failed', err));
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function renderPack(){
+  const grid = document.getElementById('packGrid');
+  const empty = document.getElementById('packEmpty');
+  if(!packReady){
+    grid.innerHTML = '';
+    empty.style.display = '';
+    empty.textContent = '준비물 기능을 사용하려면 Firebase 설정이 필요합니다. (개발자 안내 참고)';
+    return;
+  }
+  if(packItems.length===0){
+    grid.innerHTML = '';
+    empty.style.display = '';
+    empty.textContent = '아직 등록된 준비물이 없어요. 오른쪽 아래 + 버튼으로 추가해보세요.';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = packItems.map(it => `
+    <div class="packCard">
+      <button class="delBtn" onclick="deletePackItem('${it.id}')">×</button>
+      <img src="${it.imageData}" alt="">
+      <div class="memo">${escapeHtml(it.memo || '')}</div>
+    </div>
+  `).join('');
+}
+
+function openPackModal(){
+  document.getElementById('packModalOverlay').style.display = 'flex';
+}
+function closePackModal(){
+  document.getElementById('packModalOverlay').style.display = 'none';
+  document.getElementById('packFile').value = '';
+  document.getElementById('packMemo').value = '';
+  document.getElementById('packPreview').style.display = 'none';
+  pendingFile = null;
+}
+
+function onPackFileChange(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  pendingFile = file;
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    const img = document.getElementById('packPreview');
+    img.src = e.target.result;
+    img.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function loadImageEl(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=> resolve(img);
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function drawToDataUrl(img, maxSize, quality){
+  let {width, height} = img;
+  if(width > height && width > maxSize){ height = height * maxSize / width; width = maxSize; }
+  else if(height > maxSize){ width = width * maxSize / height; height = maxSize; }
+  const canvas = document.createElement('canvas');
+  canvas.width = width; canvas.height = height;
+  canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+// Firestore 문서 용량 한도(1MB) 안에 들어가도록, 필요하면 화질/크기를 점점 낮춰가며 압축합니다.
+async function compressToDataUrl(file){
+  const img = await loadImageEl(file);
+  let maxSize = 1000, quality = 0.7;
+  let dataUrl = drawToDataUrl(img, maxSize, quality);
+  let tries = 0;
+  while(dataUrl.length > 900000 && tries < 6){
+    if(quality > 0.35) quality -= 0.15; else maxSize = Math.max(500, maxSize - 150);
+    dataUrl = drawToDataUrl(img, maxSize, quality);
+    tries++;
+  }
+  return dataUrl;
+}
+
+async function savePackItem(){
+  const memo = document.getElementById('packMemo').value.trim();
+  if(!pendingFile){ alert('사진을 선택해주세요.'); return; }
+  if(!packReady){ alert('준비물 기능이 아직 설정되지 않았습니다.'); return; }
+  const btn = document.getElementById('packSaveBtn');
+  btn.disabled = true; btn.textContent = '등록 중...';
+  try{
+    const dataUrl = await compressToDataUrl(pendingFile);
+    if(dataUrl.length > 950000){
+      alert('이미지 용량이 너무 커서 저장할 수 없어요. 더 단순한 이미지로 시도해주세요.');
+      return;
+    }
+    await packDb.collection(PACK_PATH + '/items').add({
+      imageData: dataUrl, memo, createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    closePackModal();
+  }catch(e){
+    alert('등록 실패: ' + e.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '등록';
+  }
+}
+
+async function deletePackItem(id){
+  if(!confirm('삭제할까요?')) return;
+  try{ await packDb.collection(PACK_PATH + '/items').doc(id).delete(); }
+  catch(e){ alert('삭제 실패: ' + e.message); }
+}
+
+initPack();
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('controllerchange', ()=> location.reload());

@@ -1,4 +1,4 @@
-const CACHE = "fukuoka-weather-v5";
+const CACHE = "fukuoka-weather-v8";
 const SHELL = ["./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {

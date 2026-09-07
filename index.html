@@ -586,8 +586,13 @@ function renderWeatherPanels(){
 }
 
 if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('controllerchange', ()=> location.reload());
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then((reg)=>{
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.visibilityState==='visible') reg.update();
+      });
+    }).catch(()=>{});
   });
 }
 

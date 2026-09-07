@@ -211,6 +211,18 @@
     position:fixed; top:16px; right:16px; width:38px; height:38px; border-radius:50%;
     background:rgba(255,255,255,0.15); color:#fff; border:none; font-size:20px; cursor:pointer;
   }
+  .viewerNav{
+    position:fixed; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%;
+    background:rgba(255,255,255,0.15); color:#fff; border:none; font-size:24px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; z-index:41;
+  }
+  .viewerNav:disabled{opacity:.3; cursor:default;}
+  .viewerPrev{left:10px;}
+  .viewerNext{right:10px;}
+  .viewerCounter{
+    position:fixed; top:18px; left:50%; transform:translateX(-50%); color:#fff;
+    font-size:12.5px; z-index:41; background:rgba(255,255,255,0.12); padding:4px 12px; border-radius:999px;
+  }
 </style>
 </head>
 <body>
@@ -277,8 +289,12 @@
   </div>
 </div>
 
-<div id="packViewerOverlay" class="viewerOverlay" style="display:none" onclick="closePackViewer()">
-  <button class="viewerClose" onclick="closePackViewer()">×</button>
+<div id="packViewerOverlay" class="viewerOverlay" style="display:none" onclick="closePackViewer()"
+     ontouchstart="onViewerTouchStart(event)" ontouchend="onViewerTouchEnd(event)">
+  <button class="viewerClose" onclick="event.stopPropagation(); closePackViewer()">×</button>
+  <div id="packViewerCounter" class="viewerCounter"></div>
+  <button id="packViewerPrevBtn" class="viewerNav viewerPrev" onclick="event.stopPropagation(); packViewerPrev()">‹</button>
+  <button id="packViewerNextBtn" class="viewerNav viewerNext" onclick="event.stopPropagation(); packViewerNext()">›</button>
   <div class="viewerBox" onclick="event.stopPropagation()">
     <img id="packViewerImg" src="" alt="">
     <div id="packViewerMemo" class="viewerMemo"></div>
@@ -738,16 +754,54 @@ function renderPack(){
   `).join('');
 }
 
+let packViewerIndex = -1;
+let packViewerTouchX = null;
+
 function viewPackItem(id){
-  const it = packItems.find(p=> p.id===id);
-  if(!it) return;
+  const idx = packItems.findIndex(p=> p.id===id);
+  if(idx < 0) return;
+  showPackViewer(idx);
+}
+
+function showPackViewer(idx){
+  if(packItems.length===0) return;
+  packViewerIndex = (idx + packItems.length) % packItems.length;
+  const it = packItems[packViewerIndex];
   document.getElementById('packViewerImg').src = it.imageData;
   document.getElementById('packViewerMemo').textContent = it.memo || '';
+  document.getElementById('packViewerCounter').textContent = `${packViewerIndex+1} / ${packItems.length}`;
+  const multi = packItems.length > 1;
+  document.getElementById('packViewerPrevBtn').style.display = multi ? 'flex' : 'none';
+  document.getElementById('packViewerNextBtn').style.display = multi ? 'flex' : 'none';
   document.getElementById('packViewerOverlay').style.display = 'flex';
 }
+
+function packViewerNext(){ showPackViewer(packViewerIndex + 1); }
+function packViewerPrev(){ showPackViewer(packViewerIndex - 1); }
+
 function closePackViewer(){
   document.getElementById('packViewerOverlay').style.display = 'none';
+  packViewerIndex = -1;
 }
+
+function onViewerTouchStart(ev){
+  packViewerTouchX = ev.changedTouches[0].clientX;
+}
+function onViewerTouchEnd(ev){
+  if(packViewerTouchX===null) return;
+  const dx = ev.changedTouches[0].clientX - packViewerTouchX;
+  packViewerTouchX = null;
+  if(Math.abs(dx) > 40){
+    if(dx < 0) packViewerNext(); else packViewerPrev();
+  }
+}
+
+document.addEventListener('keydown', (ev)=>{
+  if(document.getElementById('packViewerOverlay').style.display !== 'flex') return;
+  if(ev.key==='ArrowRight') packViewerNext();
+  else if(ev.key==='ArrowLeft') packViewerPrev();
+  else if(ev.key==='Escape') closePackViewer();
+});
 
 function openPackModal(){
   document.getElementById('packModalOverlay').style.display = 'flex';

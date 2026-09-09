@@ -96,11 +96,22 @@
   .stat .value.lo{color:#3b82f6;}
   .stat .value.rain{color:#0ea5e9;}
 
+  .stripWrap{position:relative; margin-bottom:6px;}
   .strip{
-    display:flex; border-radius:12px; overflow:hidden; margin-bottom:16px; box-shadow: var(--shadow);
+    display:flex; border-radius:12px; overflow:hidden; box-shadow: var(--shadow);
     font-size:12px; font-weight:600; color:#fff;
   }
-  .strip .seg{padding:8px 4px; text-align:center; white-space:nowrap;}
+  .strip .seg{padding:8px 4px; text-align:center; white-space:nowrap; overflow:hidden;}
+  .stripHandle{
+    position:absolute; top:0; bottom:0; width:22px; margin-left:-11px; cursor:ew-resize;
+    display:flex; align-items:center; justify-content:center; touch-action:none; z-index:5;
+  }
+  .stripHandleDot{width:4px; height:60%; background:rgba(255,255,255,0.95); border-radius:2px; box-shadow:0 0 0 1px rgba(0,0,0,0.18);}
+  .stripHint{font-size:10.5px; color:var(--text-dim); text-align:center; margin:6px 0 4px;}
+  .resetBtn{
+    display:block; margin:0 auto 12px; font-size:11.5px; color:var(--accent); background:none;
+    border:none; cursor:pointer; padding:2px 4px; text-decoration:underline;
+  }
 
   .hours{
     display:flex; gap:10px; overflow-x:auto; padding: 4px 2px 12px;
@@ -607,83 +618,195 @@ function renderItineraryPanels(){
   });
 }
 
+const CANONICAL_HOURS = {};
+DATES.forEach(d=>{ CANONICAL_HOURS[d] = Object.keys(SCHEDULE[d]).map(Number).sort((a,b)=>a-b); });
+
+function baseGroups(dateStr){
+  const schedule = SCHEDULE[dateStr];
+  const hours = CANONICAL_HOURS[dateStr];
+  const groups = [];
+  hours.forEach(h=>{
+    const locKey = schedule[h];
+    const last = groups[groups.length-1];
+    if(last && last.locKey===locKey) last.count++;
+    else groups.push({locKey, count:1});
+  });
+  return groups;
+}
+
+function loadScheduleOverride(){
+  try{ return JSON.parse(localStorage.getItem('fukuokaScheduleOverride') || '{}'); }
+  catch(e){ return {}; }
+}
+function saveScheduleOverride(){
+  try{ localStorage.setItem('fukuokaScheduleOverride', JSON.stringify(SCHEDULE_OVERRIDE)); }catch(e){}
+}
+let SCHEDULE_OVERRIDE = loadScheduleOverride();
+
+function getGroups(dateStr){
+  return SCHEDULE_OVERRIDE[dateStr] || baseGroups(dateStr);
+}
+function hasOverride(dateStr){ return !!SCHEDULE_OVERRIDE[dateStr]; }
+function resetSchedule(dateStr){
+  delete SCHEDULE_OVERRIDE[dateStr];
+  saveScheduleOverride();
+  updateWeatherPanel(dateStr);
+}
+
+function groupsToHourMap(dateStr, groups){
+  const hours = CANONICAL_HOURS[dateStr];
+  const map = {};
+  let idx = 0;
+  groups.forEach(g=>{
+    for(let i=0; i<g.count; i++){ map[hours[idx]] = g.locKey; idx++; }
+  });
+  return map;
+}
+
+function buildWeatherPanelHtml(dateStr){
+  const groups = getGroups(dateStr);
+  const schedule = groupsToHourMap(dateStr, groups);
+  const hours = CANONICAL_HOURS[dateStr];
+  const totalHours = hours.length;
+
+  const rows = hours.map(h=>{
+    const locKey = schedule[h];
+    const loc = LOCATIONS[locKey];
+    const tk = keyFor(dateStr, h);
+    const data = CACHE[locKey];
+    const temp = data ? data.temp[tk] : undefined;
+    const precip = data ? data.precip[tk] : undefined;
+    const code = data ? data.code[tk] : undefined;
+    return {h, locKey, loc, temp, precip, code};
+  });
+
+  const haveData = rows.some(r=>r.temp!==undefined);
+  let hi=-Infinity, lo=Infinity, rainSum=0;
+  rows.forEach(r=>{
+    if(typeof r.temp==='number'){ hi=Math.max(hi,r.temp); lo=Math.min(lo,r.temp); }
+    if(typeof r.precip==='number') rainSum += r.precip;
+  });
+
+  const {md,wd} = dateLabel(dateStr);
+
+  let cum = 0;
+  const handles = groups.slice(0,-1).map((g,i)=>{
+    cum += g.count;
+    const pct = (cum/totalHours*100).toFixed(4);
+    return `<div class="stripHandle" style="left:${pct}%" onpointerdown="startDrag(event,'${dateStr}',${i})"><span class="stripHandleDot"></span></div>`;
+  }).join('');
+
+  return `
+    <div class="summary">
+      <div class="stat"><div class="label">${md} (${wd}) 최고</div><div class="value hi">${haveData && isFinite(hi)?Math.round(hi)+'°':'-'}</div></div>
+      <div class="stat"><div class="label">최저</div><div class="value lo">${haveData && isFinite(lo)?Math.round(lo)+'°':'-'}</div></div>
+      <div class="stat"><div class="label">누적 강수량</div><div class="value rain">${haveData?rainSum.toFixed(1)+'mm':'-'}</div></div>
+    </div>
+    <div class="stripWrap">
+      <div class="strip" id="strip-${dateStr}">
+        ${groups.map(g=>`<div class="seg" style="flex:${g.count}; background:${LOCATIONS[g.locKey].color}">${LOCATIONS[g.locKey].name}</div>`).join('')}
+      </div>
+      ${handles}
+    </div>
+    <div class="stripHint">↔ 구간 경계를 좌우로 끌면 시간대별 지역을 조정할 수 있어요</div>
+    ${hasOverride(dateStr) ? `<button class="resetBtn" onclick="resetSchedule('${dateStr}')">↺ 이 날짜 원래대로 되돌리기</button>` : ''}
+    <div class="hours">
+      ${rows.map(r=>{
+        const [icon] = wmo(r.code);
+        const tempTxt = typeof r.temp==='number' ? Math.round(r.temp)+'°' : '-';
+        let precipHtml;
+        if(typeof r.precip!=='number'){
+          precipHtml = `<div class="precip none">-</div>`;
+        } else if(r.precip <= 0){
+          precipHtml = `<div class="precip none">0mm</div>`;
+        } else {
+          const intensity = r.precip < 1 ? 'rgba(14,165,233,0.15)' : r.precip < 4 ? 'rgba(14,165,233,0.35)' : 'rgba(14,165,233,0.6)';
+          const tColor = r.precip < 4 ? '#0369a1' : '#fff';
+          precipHtml = `<div class="precip" style="background:${intensity}; color:${tColor}">💧${r.precip.toFixed(1)}mm</div>`;
+        }
+        const hourLabel = r.h===24 ? '24시' : `${r.h}시`;
+        return `
+          <div class="hcard">
+            <div class="hour">${hourLabel}</div>
+            <div class="badge" style="background:${r.loc.color}">${r.loc.name.replace('시','')}</div>
+            <div class="icon">${icon}</div>
+            <div class="temp">${tempTxt}</div>
+            ${precipHtml}
+          </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderWeatherPanels(){
   const panels = document.getElementById('panels');
   panels.innerHTML = '';
-
   DATES.forEach(dateStr=>{
-    const schedule = SCHEDULE[dateStr];
-    const hours = Object.keys(schedule).map(Number).sort((a,b)=>a-b);
-
-    // gather rows
-    const rows = hours.map(h=>{
-      const locKey = schedule[h];
-      const loc = LOCATIONS[locKey];
-      const tk = keyFor(dateStr, h);
-      const data = CACHE[locKey];
-      const temp = data ? data.temp[tk] : undefined;
-      const precip = data ? data.precip[tk] : undefined;
-      const code = data ? data.code[tk] : undefined;
-      return {h, locKey, loc, temp, precip, code};
-    });
-
-    const haveData = rows.some(r=>r.temp!==undefined);
-    let hi=-Infinity, lo=Infinity, rainSum=0;
-    rows.forEach(r=>{
-      if(typeof r.temp==='number'){ hi=Math.max(hi,r.temp); lo=Math.min(lo,r.temp); }
-      if(typeof r.precip==='number') rainSum += r.precip;
-    });
-
-    // region strip: group consecutive same-location hours
-    const groups = [];
-    rows.forEach(r=>{
-      const last = groups[groups.length-1];
-      if(last && last.locKey===r.locKey) last.count++;
-      else groups.push({locKey:r.locKey, count:1});
-    });
-
     const panel = document.createElement('div');
     panel.className = 'panel' + (dateStr===activeDate?' active':'');
-
-    const {md,wd} = dateLabel(dateStr);
-
-    panel.innerHTML = `
-      <div class="summary">
-        <div class="stat"><div class="label">${md} (${wd}) 최고</div><div class="value hi">${haveData && isFinite(hi)?Math.round(hi)+'°':'-'}</div></div>
-        <div class="stat"><div class="label">최저</div><div class="value lo">${haveData && isFinite(lo)?Math.round(lo)+'°':'-'}</div></div>
-        <div class="stat"><div class="label">누적 강수량</div><div class="value rain">${haveData?rainSum.toFixed(1)+'mm':'-'}</div></div>
-      </div>
-      <div class="strip">
-        ${groups.map(g=>`<div class="seg" style="flex:${g.count}; background:${LOCATIONS[g.locKey].color}">${LOCATIONS[g.locKey].name}</div>`).join('')}
-      </div>
-      <div class="hours">
-        ${rows.map(r=>{
-          const [icon] = wmo(r.code);
-          const tempTxt = typeof r.temp==='number' ? Math.round(r.temp)+'°' : '-';
-          let precipHtml;
-          if(typeof r.precip!=='number'){
-            precipHtml = `<div class="precip none">-</div>`;
-          } else if(r.precip <= 0){
-            precipHtml = `<div class="precip none">0mm</div>`;
-          } else {
-            const intensity = r.precip < 1 ? 'rgba(14,165,233,0.15)' : r.precip < 4 ? 'rgba(14,165,233,0.35)' : 'rgba(14,165,233,0.6)';
-            const tColor = r.precip < 4 ? '#0369a1' : '#fff';
-            precipHtml = `<div class="precip" style="background:${intensity}; color:${tColor}">💧${r.precip.toFixed(1)}mm</div>`;
-          }
-          const hourLabel = r.h===24 ? '24시' : `${r.h}시`;
-          return `
-            <div class="hcard">
-              <div class="hour">${hourLabel}</div>
-              <div class="badge" style="background:${r.loc.color}">${r.loc.name.replace('시','')}</div>
-              <div class="icon">${icon}</div>
-              <div class="temp">${tempTxt}</div>
-              ${precipHtml}
-            </div>`;
-        }).join('')}
-      </div>
-    `;
+    panel.dataset.date = dateStr;
+    panel.innerHTML = buildWeatherPanelHtml(dateStr);
     panels.appendChild(panel);
   });
+}
+
+function updateWeatherPanel(dateStr){
+  const panel = document.querySelector('#panels .panel[data-date="' + dateStr + '"]');
+  if(panel) panel.innerHTML = buildWeatherPanelHtml(dateStr);
+}
+
+let dragState = null;
+let dragRafPending = false;
+
+function startDrag(ev, dateStr, boundaryIdx){
+  ev.preventDefault();
+  const stripEl = document.getElementById('strip-' + dateStr);
+  const rect = stripEl.getBoundingClientRect();
+  const groups = getGroups(dateStr).map(g=>({...g}));
+  dragState = {dateStr, boundaryIdx, rect, groups, totalHours: CANONICAL_HOURS[dateStr].length, lastEvent: ev};
+  document.addEventListener('pointermove', onDragMove);
+  document.addEventListener('pointerup', onDragEnd);
+}
+
+function onDragMove(ev){
+  if(!dragState) return;
+  dragState.lastEvent = ev;
+  if(dragRafPending) return;
+  dragRafPending = true;
+  requestAnimationFrame(()=>{
+    dragRafPending = false;
+    applyDrag();
+  });
+}
+
+function applyDrag(){
+  if(!dragState) return;
+  const {dateStr, boundaryIdx, rect, groups, totalHours, lastEvent} = dragState;
+  let frac = (lastEvent.clientX - rect.left) / rect.width;
+  frac = Math.max(0, Math.min(1, frac));
+  let hourPos = Math.round(frac * totalHours);
+
+  const cumBefore = groups.slice(0, boundaryIdx).reduce((s,g)=>s+g.count,0);
+  const cumSpan = cumBefore + groups[boundaryIdx].count + groups[boundaryIdx+1].count;
+  const minPos = cumBefore + 1;
+  const maxPos = cumSpan - 1;
+  hourPos = Math.max(minPos, Math.min(maxPos, hourPos));
+
+  const newLeftCount = hourPos - cumBefore;
+  if(newLeftCount === groups[boundaryIdx].count) return;
+
+  groups[boundaryIdx].count = newLeftCount;
+  groups[boundaryIdx+1].count = cumSpan - hourPos;
+  SCHEDULE_OVERRIDE[dateStr] = groups;
+  updateWeatherPanel(dateStr);
+}
+
+function onDragEnd(){
+  if(!dragState) return;
+  saveScheduleOverride();
+  dragState = null;
+  document.removeEventListener('pointermove', onDragMove);
+  document.removeEventListener('pointerup', onDragEnd);
 }
 
 // ↓↓↓ Firebase 콘솔(console.firebase.google.com)에서 만든 프로젝트의 설정값을 여기 붙여넣으세요 ↓↓↓
